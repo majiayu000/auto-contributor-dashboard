@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { RefreshCw, Bug, CheckCircle, XCircle, Clock, GitPullRequest, Activity } from 'lucide-react';
+import { RefreshCw, Bug, CheckCircle, XCircle, Clock, GitPullRequest, Zap, Terminal } from 'lucide-react';
 import { StatsCard } from '@/components/StatsCard';
 import { IssueTable } from '@/components/IssueTable';
 import { PRList } from '@/components/PRList';
@@ -107,94 +107,117 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
         <div className="text-center">
-          <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mx-auto" />
-          <p className="mt-2 text-zinc-500 dark:text-zinc-400">Loading dashboard...</p>
+          <div className="w-10 h-10 rounded-full border-2 border-[#1a1a24] border-t-[#00ff9d] spinner mx-auto" />
+          <p className="mt-4 text-sm text-[#71717a] font-mono">Initializing system...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950">
-      <header className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+    <div className="min-h-screen bg-[#0a0a0f] grid-bg">
+      {/* Scanline overlay */}
+      <div className="scanlines" />
+
+      {/* Header */}
+      <header className="sticky top-0 z-50 bg-[#0a0a0f]/80 backdrop-blur-xl border-b border-white/5">
+        <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Activity className="w-8 h-8 text-blue-500" />
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <Terminal className="w-8 h-8 text-[#00ff9d]" />
+                <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[#00ff9d] rounded-full pulse-indicator" />
+              </div>
               <div>
-                <h1 className="text-xl font-bold text-zinc-900 dark:text-white">Auto Contributor</h1>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">Dashboard</p>
+                <h1 className="text-lg font-bold text-[#e4e4e7] tracking-tight">
+                  Auto Contributor
+                </h1>
+                <p className="text-xs text-[#71717a] font-mono">
+                  v1.0.0 • System Active
+                </p>
               </div>
             </div>
+
             <div className="flex items-center gap-4">
               {lastUpdate && (
-                <span className="text-xs text-zinc-400">
-                  Last updated: {lastUpdate.toLocaleTimeString()}
-                </span>
+                <div className="flex items-center gap-2 text-xs text-[#52525b] font-mono">
+                  <span className="w-1.5 h-1.5 bg-[#00ff9d] rounded-full" />
+                  <span>Synced {lastUpdate.toLocaleTimeString()}</span>
+                </div>
               )}
               <button
                 onClick={fetchData}
-                className="p-2 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg"
+                className="p-2 text-[#71717a] hover:text-[#00ff9d] hover:bg-[#1a1a24] rounded-lg transition-all group"
               >
-                <RefreshCw className="w-5 h-5" />
+                <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
               </button>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatsCard
             title="Total Issues"
             value={stats?.total_issues || 0}
             icon={Bug}
-            color="bg-blue-500"
+            variant="info"
           />
           <StatsCard
             title="Pending"
             value={stats?.pending_issues || 0}
             icon={Clock}
-            color="bg-yellow-500"
+            variant="warning"
             subtitle={`${stats?.processing_issues || 0} processing`}
           />
           <StatsCard
             title="Completed"
             value={stats?.completed_issues || 0}
             icon={CheckCircle}
-            color="bg-green-500"
+            variant="success"
             subtitle={`${stats?.success_rate?.toFixed(1) || 0}% success rate`}
           />
           <StatsCard
             title="Pull Requests"
             value={stats?.total_prs || 0}
             icon={GitPullRequest}
-            color="bg-purple-500"
+            variant="purple"
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="flex gap-2 mb-4">
-              {(['all', 'pending', 'processing', 'completed', 'failed'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-4 py-2 text-sm rounded-lg transition-colors ${
-                    activeTab === tab
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700'
-                  }`}
-                >
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </button>
-              ))}
+        {/* Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Issues Section */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Tab Navigation */}
+            <div className="flex items-center gap-2 p-1 bg-[#12121a] rounded-lg border border-white/5 w-fit">
+              {(['all', 'pending', 'processing', 'completed', 'failed'] as const).map((tab) => {
+                const isActive = activeTab === tab;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`px-4 py-2 text-xs font-mono font-medium rounded-md transition-all ${
+                      isActive
+                        ? 'bg-[#00ff9d]/10 text-[#00ff9d] border border-[#00ff9d]/20'
+                        : 'text-[#71717a] hover:text-[#a1a1aa] hover:bg-[#1a1a24]'
+                    }`}
+                  >
+                    {tab.toUpperCase()}
+                  </button>
+                );
+              })}
             </div>
+
             <IssueTable issues={issues} title={`Issues (${issues.length})`} />
           </div>
 
+          {/* Sidebar */}
           <div className="space-y-6">
             <PRList prs={prs} />
             <BlacklistManager
@@ -205,6 +228,16 @@ export default function Dashboard() {
           </div>
         </div>
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-white/5 mt-12">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between text-xs text-[#52525b] font-mono">
+            <span>Auto Contributor Dashboard</span>
+            <span>Powered by Claude</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
