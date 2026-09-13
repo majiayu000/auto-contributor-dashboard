@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { RefreshCw, Bug, CheckCircle, XCircle, Clock, GitPullRequest, Zap, Terminal } from 'lucide-react';
+import { RefreshCw, Bug, CheckCircle, Clock, GitPullRequest, Terminal } from 'lucide-react';
 import { StatsCard } from '@/components/StatsCard';
 import { IssueTable } from '@/components/IssueTable';
 import { PRList } from '@/components/PRList';
