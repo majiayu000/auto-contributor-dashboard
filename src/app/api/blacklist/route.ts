@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAdminAuth } from '@/lib/admin-auth';
 import { getBlacklist, addToBlacklist, removeFromBlacklist } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const unauthorized = requireAdminAuth(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const { repo, reason } = await request.json();
     if (!repo) {
@@ -28,6 +32,9 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const unauthorized = requireAdminAuth(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const { searchParams } = new URL(request.url);
     const repo = searchParams.get('repo');

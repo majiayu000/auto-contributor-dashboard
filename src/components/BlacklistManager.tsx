@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Ban, Plus, Trash2, Shield } from 'lucide-react';
+import { Ban, Plus, Trash2, Shield, KeyRound, LogOut } from 'lucide-react';
 
 interface BlacklistEntry {
   id: number;
@@ -14,6 +14,9 @@ interface BlacklistManagerProps {
   entries: BlacklistEntry[];
   onAdd: (repo: string, reason: string) => Promise<void>;
   onRemove: (repo: string) => Promise<void>;
+  onAdminLogin: (token: string) => Promise<void>;
+  onAdminLogout: () => Promise<void>;
+  adminAuthenticated: boolean;
 }
 
 function formatDate(dateString: string): string {
@@ -21,20 +24,58 @@ function formatDate(dateString: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export function BlacklistManager({ entries, onAdd, onRemove }: BlacklistManagerProps) {
+export function BlacklistManager({
+  entries,
+  onAdd,
+  onRemove,
+  onAdminLogin,
+  onAdminLogout,
+  adminAuthenticated,
+}: BlacklistManagerProps) {
   const [newRepo, setNewRepo] = useState('');
   const [newReason, setNewReason] = useState('');
+  const [adminToken, setAdminToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleLogin = async () => {
+    if (!adminToken.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await onAdminLogin(adminToken.trim());
+      setAdminToken('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await onAdminLogout();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Logout failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAdd = async () => {
     if (!newRepo.trim()) return;
     setLoading(true);
+    setError(null);
     try {
       await onAdd(newRepo.trim(), newReason.trim() || 'User requested');
       setNewRepo('');
       setNewReason('');
       setIsExpanded(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add');
     } finally {
       setLoading(false);
     }
@@ -42,8 +83,11 @@ export function BlacklistManager({ entries, onAdd, onRemove }: BlacklistManagerP
 
   const handleRemove = async (repo: string) => {
     setLoading(true);
+    setError(null);
     try {
       await onRemove(repo);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove');
     } finally {
       setLoading(false);
     }
@@ -63,17 +107,71 @@ export function BlacklistManager({ entries, onAdd, onRemove }: BlacklistManagerP
           <span className="text-xs text-[#71717a] font-mono px-2 py-0.5 bg-[#1a1a24] rounded">
             {entries.length}
           </span>
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1.5 text-[#71717a] hover:text-[#00ff9d] hover:bg-[#1a1a24] rounded transition-colors"
-          >
-            <Plus className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-45' : ''}`} />
-          </button>
+          {adminAuthenticated && (
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="p-1.5 text-[#71717a] hover:text-[#00ff9d] hover:bg-[#1a1a24] rounded transition-colors"
+            >
+              <Plus className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-45' : ''}`} />
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Admin auth */}
+      <div className="px-4 py-3 border-b border-white/5 bg-[#0a0a0f]/50">
+        {adminAuthenticated ? (
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-[#00ff9d] font-mono">Admin session active</span>
+            <button
+              onClick={handleLogout}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-2 py-1 text-xs text-[#71717a] hover:text-[#ff3d5a] font-mono rounded transition-colors disabled:opacity-50"
+            >
+              <LogOut className="w-3 h-3" />
+              Logout
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <label className="text-[10px] text-[#71717a] uppercase tracking-wider font-mono block">
+              Admin token
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                placeholder="ADMIN_API_TOKEN"
+                value={adminToken}
+                onChange={(e) => setAdminToken(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void handleLogin();
+                }}
+                className="flex-1 px-3 py-2 text-sm bg-[#1a1a24] border border-white/5 rounded text-[#e4e4e7] placeholder-[#52525b] font-mono focus:border-[#00ff9d]/50 transition-colors"
+              />
+              <button
+                onClick={handleLogin}
+                disabled={loading || !adminToken.trim()}
+                className="px-3 py-2 bg-[#1a1a24] border border-white/5 text-[#e4e4e7] text-xs font-mono rounded hover:border-[#00ff9d]/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                Login
+              </button>
+            </div>
+            <p className="text-[10px] text-[#52525b] font-mono">
+              Mutations require an admin session or Bearer token.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <div className="px-4 py-2 border-b border-white/5 text-xs text-[#ff3d5a] font-mono">
+          {error}
+        </div>
+      )}
+
       {/* Add Form */}
-      {isExpanded && (
+      {adminAuthenticated && isExpanded && (
         <div className="p-4 border-b border-white/5 bg-[#0a0a0f]/50">
           <div className="space-y-3">
             <div>
@@ -138,13 +236,15 @@ export function BlacklistManager({ entries, onAdd, onRemove }: BlacklistManagerP
                   </span>
                 </div>
               </div>
-              <button
-                onClick={() => handleRemove(entry.repo)}
-                disabled={loading}
-                className="p-2 text-[#71717a] hover:text-[#ff3d5a] hover:bg-[#ff3d5a]/10 rounded transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {adminAuthenticated && (
+                <button
+                  onClick={() => handleRemove(entry.repo)}
+                  disabled={loading}
+                  className="p-2 text-[#71717a] hover:text-[#ff3d5a] hover:bg-[#ff3d5a]/10 rounded transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           ))
         )}
