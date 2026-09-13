@@ -69,10 +69,18 @@ export function parseLimit(
   raw: string | number | null | undefined,
   options: { default?: number; min?: number; max?: number } = {}
 ): number {
-  const defaultLimit = options.default ?? DEFAULT_LIMIT;
   const min = options.min ?? MIN_LIMIT;
   const max = options.max ?? MAX_LIMIT;
-  const n = typeof raw === 'number' ? raw : parseInt(String(raw ?? ''), 10);
+  // Always clamp the fallback so custom defaults cannot bypass max/min.
+  const defaultLimit = Math.min(
+    max,
+    Math.max(min, Math.trunc(options.default ?? DEFAULT_LIMIT))
+  );
+  // Integerize numeric inputs (e.g. 1.5) so Postgres LIMIT never receives a float.
+  const n =
+    typeof raw === 'number'
+      ? Math.trunc(raw)
+      : parseInt(String(raw ?? ''), 10);
   if (!Number.isFinite(n) || n <= 0) {
     return defaultLimit;
   }
