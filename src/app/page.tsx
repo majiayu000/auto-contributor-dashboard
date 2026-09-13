@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { RefreshCw, Bug, CheckCircle, XCircle, Clock, GitPullRequest, Zap, Terminal } from 'lucide-react';
 import { StatsCard } from '@/components/StatsCard';
 import { IssueTable } from '@/components/IssueTable';
@@ -46,6 +46,8 @@ interface BlacklistEntry {
   added_at: string;
 }
 
+type IssueTab = 'all' | 'pending' | 'processing' | 'completed' | 'failed';
+
 function isStatsPayload(value: unknown): value is Stats {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Record<string, unknown>;
@@ -76,14 +78,20 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'processing' | 'completed' | 'failed'>('all');
+  const [activeTab, setActiveTab] = useState<IssueTab>('all');
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
+  const fetchRequestIdRef = useRef(0);
+  const issuesFilterRef = useRef<IssueTab>('all');
 
   const fetchData = useCallback(async () => {
+    const requestId = ++fetchRequestIdRef.current;
+    const requestedTab = activeTab;
+    const isLatest = () => requestId === fetchRequestIdRef.current;
+
     try {
       const [statsRes, issuesRes, prsRes, blacklistRes] = await Promise.all([
         fetch('/api/stats'),
-        fetch(`/api/issues${activeTab !== 'all' ? `?status=${activeTab}` : ''}`),
+        fetch(`/api/issues${requestedTab !== 'all' ? `?status=${requestedTab}` : ''}`),
         fetch('/api/prs'),
         fetch('/api/blacklist'),
       ]);
@@ -95,6 +103,10 @@ export default function Dashboard() {
         readJson(blacklistRes),
       ]);
 
+      if (!isLatest()) {
+        return;
+      }
+
       const failures: string[] = [];
 
       if (statsRes.ok && isStatsPayload(statsData)) {
@@ -105,8 +117,14 @@ export default function Dashboard() {
 
       if (issuesRes.ok && Array.isArray(issuesData)) {
         setIssues(issuesData);
+        issuesFilterRef.current = requestedTab;
       } else {
         failures.push('issues');
+        // Never keep another tab's rows under the newly selected filter.
+        if (issuesFilterRef.current !== requestedTab) {
+          setIssues([]);
+          issuesFilterRef.current = requestedTab;
+        }
       }
 
       if (prsRes.ok && Array.isArray(prsData)) {
@@ -129,9 +147,14 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error('Error fetching data:', error);
+      if (!isLatest()) {
+        return;
+      }
       setFetchError('Failed to refresh dashboard data. Showing last successful data.');
     } finally {
-      setLoading(false);
+      if (isLatest()) {
+        setLoading(false);
+      }
     }
   }, [activeTab]);
 
