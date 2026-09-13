@@ -1,8 +1,11 @@
 import { Pool } from 'pg';
 
+// Only disable TLS cert verification when explicitly opted in for local/dev.
+const allowInsecureSsl = process.env.DATABASE_SSL_INSECURE === 'true';
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: !allowInsecureSsl },
 });
 
 export interface Issue {
