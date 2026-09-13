@@ -176,7 +176,13 @@ export default function Dashboard() {
       }
       setFetchError('Failed to refresh dashboard data. Showing last successful data.');
     } finally {
+      // Abort siblings still in flight when Promise.all rejects early (one fetch
+      // failed while another is stalled). Clearing the timeout alone would leave
+      // those requests detached from fetchAbortRef and able to accumulate.
       window.clearTimeout(timeoutId);
+      if (!controller.signal.aborted) {
+        controller.abort();
+      }
       if (fetchAbortRef.current === controller) {
         fetchAbortRef.current = null;
       }
