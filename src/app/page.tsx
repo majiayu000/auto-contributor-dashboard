@@ -46,12 +46,35 @@ interface BlacklistEntry {
   added_at: string;
 }
 
+function isStatsPayload(value: unknown): value is Stats {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.total_issues === 'number' &&
+    typeof candidate.pending_issues === 'number' &&
+    typeof candidate.processing_issues === 'number' &&
+    typeof candidate.completed_issues === 'number' &&
+    typeof candidate.failed_issues === 'number' &&
+    typeof candidate.total_prs === 'number' &&
+    typeof candidate.success_rate === 'number'
+  );
+}
+
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [prs, setPrs] = useState<PullRequest[]>([]);
   const [blacklist, setBlacklist] = useState<BlacklistEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'processing' | 'completed' | 'failed'>('all');
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
@@ -66,19 +89,47 @@ export default function Dashboard() {
       ]);
 
       const [statsData, issuesData, prsData, blacklistData] = await Promise.all([
-        statsRes.json(),
-        issuesRes.json(),
-        prsRes.json(),
-        blacklistRes.json(),
+        readJson(statsRes),
+        readJson(issuesRes),
+        readJson(prsRes),
+        readJson(blacklistRes),
       ]);
 
-      setStats(statsData);
-      setIssues(issuesData);
-      setPrs(prsData);
-      setBlacklist(blacklistData);
-      setLastUpdate(new Date());
+      const failures: string[] = [];
+
+      if (statsRes.ok && isStatsPayload(statsData)) {
+        setStats(statsData);
+      } else {
+        failures.push('stats');
+      }
+
+      if (issuesRes.ok && Array.isArray(issuesData)) {
+        setIssues(issuesData);
+      } else {
+        failures.push('issues');
+      }
+
+      if (prsRes.ok && Array.isArray(prsData)) {
+        setPrs(prsData);
+      } else {
+        failures.push('prs');
+      }
+
+      if (blacklistRes.ok && Array.isArray(blacklistData)) {
+        setBlacklist(blacklistData);
+      } else {
+        failures.push('blacklist');
+      }
+
+      if (failures.length > 0) {
+        setFetchError(`Failed to load: ${failures.join(', ')}. Showing last successful data.`);
+      } else {
+        setFetchError(null);
+        setLastUpdate(new Date());
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
+      setFetchError('Failed to refresh dashboard data. Showing last successful data.');
     } finally {
       setLoading(false);
     }
@@ -215,6 +266,15 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
+        {fetchError && (
+          <div
+            role="alert"
+            className="mb-6 rounded-lg border border-[#ff6b6b]/30 bg-[#ff6b6b]/10 px-4 py-3 text-sm font-mono text-[#ff8a8a]"
+          >
+            {fetchError}
+          </div>
+        )}
+
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatsCard
