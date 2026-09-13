@@ -16,9 +16,38 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Required | Description |
+| --- | --- | --- |
+| `DATABASE_URL` | Yes | Postgres connection string used by the dashboard APIs |
+| `ADMIN_API_TOKEN` | Yes for writes | Shared secret that authorizes blacklist mutations. When unset, `POST`/`DELETE` `/api/blacklist` always return `401`. |
+
+### Admin auth for blacklist mutations
+
+- `GET /api/blacklist` remains public (read-only).
+- `POST /api/blacklist` and `DELETE /api/blacklist` require either:
+  - `Authorization: Bearer <ADMIN_API_TOKEN>`, or
+  - a SameSite=Strict httpOnly `admin_session` cookie set by `POST /api/admin/login` with `{ "token": "<ADMIN_API_TOKEN>" }`.
+- Clear the session with `DELETE /api/admin/login`.
+- The dashboard blacklist UI logs in via that endpoint and sends `credentials: 'same-origin'` on mutation requests.
+
+Example:
+
+```bash
+export ADMIN_API_TOKEN='replace-with-a-long-random-secret'
+
+# Rejected
+curl -i -X POST http://localhost:3000/api/blacklist \
+  -H 'Content-Type: application/json' \
+  -d '{"repo":"owner/repo","reason":"test"}'
+
+# Accepted
+curl -i -X POST http://localhost:3000/api/blacklist \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $ADMIN_API_TOKEN" \
+  -d '{"repo":"owner/repo","reason":"test"}'
+```
 
 ## Learn More
 
@@ -27,7 +56,7 @@ To learn more about Next.js, take a look at the following resources:
 - [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+You can check out the [Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
 ## Deploy on Vercel
 

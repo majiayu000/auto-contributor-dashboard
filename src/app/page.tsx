@@ -54,6 +54,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'processing' | 'completed' | 'failed'>('all');
+  const [adminAuthenticated, setAdminAuthenticated] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -89,19 +90,53 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  const handleAddBlacklist = async (repo: string, reason: string) => {
-    await fetch('/api/blacklist', {
+  const handleAdminLogin = async (token: string) => {
+    const res = await fetch('/api/admin/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ token }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Unauthorized');
+    }
+    setAdminAuthenticated(true);
+  };
+
+  const handleAdminLogout = async () => {
+    await fetch('/api/admin/login', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    });
+    setAdminAuthenticated(false);
+  };
+
+  const handleAddBlacklist = async (repo: string, reason: string) => {
+    const res = await fetch('/api/blacklist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
       body: JSON.stringify({ repo, reason }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) setAdminAuthenticated(false);
+      throw new Error(data.error || 'Failed to add to blacklist');
+    }
     fetchData();
   };
 
   const handleRemoveBlacklist = async (repo: string) => {
-    await fetch(`/api/blacklist?repo=${encodeURIComponent(repo)}`, {
+    const res = await fetch(`/api/blacklist?repo=${encodeURIComponent(repo)}`, {
       method: 'DELETE',
+      credentials: 'same-origin',
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) setAdminAuthenticated(false);
+      throw new Error(data.error || 'Failed to remove from blacklist');
+    }
     fetchData();
   };
 
@@ -224,6 +259,9 @@ export default function Dashboard() {
               entries={blacklist}
               onAdd={handleAddBlacklist}
               onRemove={handleRemoveBlacklist}
+              onAdminLogin={handleAdminLogin}
+              onAdminLogout={handleAdminLogout}
+              adminAuthenticated={adminAuthenticated}
             />
           </div>
         </div>
