@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getPullRequests } from '@/lib/db';
+import { getPullRequests, parseLimit } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const limit = parseLimit(searchParams.get('limit'));
 
     const prs = await getPullRequests(limit);
     return NextResponse.json(prs);
