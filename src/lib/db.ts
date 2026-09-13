@@ -60,7 +60,27 @@ export interface Stats {
   success_rate: number;
 }
 
-export async function getIssues(status?: string, limit = 50): Promise<Issue[]> {
+const DEFAULT_LIMIT = 50;
+const MIN_LIMIT = 1;
+const MAX_LIMIT = 100;
+
+/** Parse and clamp a LIMIT value. NaN / non-positive → default; then clamp to [min, max]. */
+export function parseLimit(
+  raw: string | number | null | undefined,
+  options: { default?: number; min?: number; max?: number } = {}
+): number {
+  const defaultLimit = options.default ?? DEFAULT_LIMIT;
+  const min = options.min ?? MIN_LIMIT;
+  const max = options.max ?? MAX_LIMIT;
+  const n = typeof raw === 'number' ? raw : parseInt(String(raw ?? ''), 10);
+  if (!Number.isFinite(n) || n <= 0) {
+    return defaultLimit;
+  }
+  return Math.min(max, Math.max(min, n));
+}
+
+export async function getIssues(status?: string, limit = DEFAULT_LIMIT): Promise<Issue[]> {
+  const safeLimit = parseLimit(limit);
   let query = 'SELECT * FROM issues';
   const params: (string | number)[] = [];
 
@@ -70,16 +90,17 @@ export async function getIssues(status?: string, limit = 50): Promise<Issue[]> {
   }
 
   query += ' ORDER BY updated_at DESC LIMIT $' + (params.length + 1);
-  params.push(limit);
+  params.push(safeLimit);
 
   const result = await pool.query(query, params);
   return result.rows;
 }
 
-export async function getPullRequests(limit = 50): Promise<PullRequest[]> {
+export async function getPullRequests(limit = DEFAULT_LIMIT): Promise<PullRequest[]> {
+  const safeLimit = parseLimit(limit);
   const result = await pool.query(
     'SELECT * FROM pull_requests ORDER BY created_at DESC LIMIT $1',
-    [limit]
+    [safeLimit]
   );
   return result.rows;
 }
