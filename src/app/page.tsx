@@ -48,6 +48,9 @@ interface BlacklistEntry {
 
 type IssueTab = 'all' | 'pending' | 'processing' | 'completed' | 'failed';
 
+/** Abort hung dashboard fetches so polling can recover after a stall. */
+const FETCH_TIMEOUT_MS = 15_000;
+
 function isStatsPayload(value: unknown): value is Stats {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Record<string, unknown>;
@@ -82,6 +85,7 @@ export default function Dashboard() {
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
   const fetchRequestIdRef = useRef(0);
   const fetchInFlightRef = useRef(false);
+  const fetchAbortRef = useRef<AbortController | null>(null);
   const issuesFilterRef = useRef<IssueTab>('all');
 
   const fetchData = useCallback(async (options?: { force?: boolean }) => {
@@ -91,17 +95,24 @@ export default function Dashboard() {
       return;
     }
 
+    // Abort any prior batch (including hung requests) so force refresh / tab change can recover.
+    fetchAbortRef.current?.abort();
+    const controller = new AbortController();
+    fetchAbortRef.current = controller;
+    const timeoutId = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
     const requestId = ++fetchRequestIdRef.current;
     const requestedTab = activeTab;
     const isLatest = () => requestId === fetchRequestIdRef.current;
     fetchInFlightRef.current = true;
 
     try {
+      const { signal } = controller;
       const [statsRes, issuesRes, prsRes, blacklistRes] = await Promise.all([
-        fetch('/api/stats'),
-        fetch(`/api/issues${requestedTab !== 'all' ? `?status=${requestedTab}` : ''}`),
-        fetch('/api/prs'),
-        fetch('/api/blacklist'),
+        fetch('/api/stats', { signal }),
+        fetch(`/api/issues${requestedTab !== 'all' ? `?status=${requestedTab}` : ''}`, { signal }),
+        fetch('/api/prs', { signal }),
+        fetch('/api/blacklist', { signal }),
       ]);
 
       const [statsData, issuesData, prsData, blacklistData] = await Promise.all([
@@ -165,6 +176,10 @@ export default function Dashboard() {
       }
       setFetchError('Failed to refresh dashboard data. Showing last successful data.');
     } finally {
+      window.clearTimeout(timeoutId);
+      if (fetchAbortRef.current === controller) {
+        fetchAbortRef.current = null;
+      }
       if (isLatest()) {
         fetchInFlightRef.current = false;
         setLoading(false);
@@ -197,7 +212,10 @@ export default function Dashboard() {
     const interval = setInterval(() => {
       void fetchData({ force: false });
     }, 10000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      fetchAbortRef.current?.abort();
+    };
   }, [fetchData]);
 
   const handleAdminLogin = async (token: string) => {
