@@ -29,8 +29,11 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 - `POST /api/blacklist` and `DELETE /api/blacklist` require either:
   - `Authorization: Bearer <ADMIN_API_TOKEN>`, or
   - a SameSite=Strict httpOnly `admin_session` cookie set by `POST /api/admin/login` with `{ "token": "<ADMIN_API_TOKEN>" }`.
+- The session cookie stores an HMAC-signed, time-limited credential derived from `ADMIN_API_TOKEN` — not the root secret itself. Expired or tampered cookies are rejected.
+- `GET /api/admin/login` returns `{ "authenticated": true|false }` so the UI can restore controls from a still-valid cookie after reload.
 - Clear the session with `DELETE /api/admin/login`.
 - The dashboard blacklist UI logs in via that endpoint and sends `credentials: 'same-origin'` on mutation requests.
+- Surrounding whitespace on `ADMIN_API_TOKEN` is trimmed so file-sourced secrets with a trailing newline still match login/Bearer credentials.
 
 Example:
 

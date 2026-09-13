@@ -2,10 +2,16 @@ import { NextResponse } from 'next/server';
 import {
   buildAdminSessionCookie,
   clearAdminSessionCookie,
+  hasValidAdminSession,
   verifyAdminToken,
 } from '@/lib/admin-auth';
 
 export const dynamic = 'force-dynamic';
+
+/** Restore UI auth state from the httpOnly session cookie. */
+export async function GET(request: Request) {
+  return NextResponse.json({ authenticated: hasValidAdminSession(request) });
+}
 
 export async function POST(request: Request) {
   try {
@@ -22,7 +28,7 @@ export async function POST(request: Request) {
     }
 
     const response = NextResponse.json({ success: true });
-    response.headers.set('Set-Cookie', buildAdminSessionCookie(token));
+    response.headers.set('Set-Cookie', buildAdminSessionCookie());
     return response;
   } catch (error) {
     console.error('Error during admin login:', error);

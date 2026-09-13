@@ -85,6 +85,26 @@ export default function Dashboard() {
   }, [activeTab]);
 
   useEffect(() => {
+    let cancelled = false;
+    const restoreAdminSession = async () => {
+      try {
+        const res = await fetch('/api/admin/login', { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        if (!cancelled) {
+          setAdminAuthenticated(Boolean(data.authenticated));
+        }
+      } catch (error) {
+        console.error('Error restoring admin session:', error);
+      }
+    };
+    void restoreAdminSession();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
