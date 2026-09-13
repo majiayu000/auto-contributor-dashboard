@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { RefreshCw, Bug, CheckCircle, XCircle, Clock, GitPullRequest, Zap, Terminal } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { RefreshCw, Bug, CheckCircle, Clock, GitPullRequest, Terminal } from 'lucide-react';
 import { StatsCard } from '@/components/StatsCard';
 import { IssueTable } from '@/components/IssueTable';
 import { PRList } from '@/components/PRList';
@@ -46,41 +46,150 @@ interface BlacklistEntry {
   added_at: string;
 }
 
+type IssueTab = 'all' | 'pending' | 'processing' | 'completed' | 'failed';
+
+/** Abort hung dashboard fetches so polling can recover after a stall. */
+const FETCH_TIMEOUT_MS = 15_000;
+
+function isStatsPayload(value: unknown): value is Stats {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.total_issues === 'number' &&
+    typeof candidate.pending_issues === 'number' &&
+    typeof candidate.processing_issues === 'number' &&
+    typeof candidate.completed_issues === 'number' &&
+    typeof candidate.failed_issues === 'number' &&
+    typeof candidate.total_prs === 'number' &&
+    typeof candidate.success_rate === 'number'
+  );
+}
+
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [prs, setPrs] = useState<PullRequest[]>([]);
   const [blacklist, setBlacklist] = useState<BlacklistEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'processing' | 'completed' | 'failed'>('all');
+  const [activeTab, setActiveTab] = useState<IssueTab>('all');
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
+  const fetchRequestIdRef = useRef(0);
+  const fetchInFlightRef = useRef(false);
+  const fetchAbortRef = useRef<AbortController | null>(null);
+  const issuesFilterRef = useRef<IssueTab>('all');
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (options?: { force?: boolean }) => {
+    const force = options?.force ?? true;
+    // Skip overlapping polls so a slow in-flight load can finish and clear loading.
+    if (fetchInFlightRef.current && !force) {
+      return;
+    }
+
+    // Abort any prior batch (including hung requests) so force refresh / tab change can recover.
+    fetchAbortRef.current?.abort();
+    const controller = new AbortController();
+    fetchAbortRef.current = controller;
+    const timeoutId = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    const requestId = ++fetchRequestIdRef.current;
+    const requestedTab = activeTab;
+    const isLatest = () => requestId === fetchRequestIdRef.current;
+    fetchInFlightRef.current = true;
+
     try {
+      const { signal } = controller;
       const [statsRes, issuesRes, prsRes, blacklistRes] = await Promise.all([
-        fetch('/api/stats'),
-        fetch(`/api/issues${activeTab !== 'all' ? `?status=${activeTab}` : ''}`),
-        fetch('/api/prs'),
-        fetch('/api/blacklist'),
+        fetch('/api/stats', { signal }),
+        fetch(`/api/issues${requestedTab !== 'all' ? `?status=${requestedTab}` : ''}`, { signal }),
+        fetch('/api/prs', { signal }),
+        fetch('/api/blacklist', { signal }),
       ]);
 
       const [statsData, issuesData, prsData, blacklistData] = await Promise.all([
-        statsRes.json(),
-        issuesRes.json(),
-        prsRes.json(),
-        blacklistRes.json(),
+        readJson(statsRes),
+        readJson(issuesRes),
+        readJson(prsRes),
+        readJson(blacklistRes),
       ]);
 
-      setStats(statsData);
-      setIssues(issuesData);
-      setPrs(prsData);
-      setBlacklist(blacklistData);
-      setLastUpdate(new Date());
+      if (!isLatest()) {
+        return;
+      }
+
+      const failures: string[] = [];
+
+      if (statsRes.ok && isStatsPayload(statsData)) {
+        setStats(statsData);
+      } else {
+        failures.push('stats');
+      }
+
+      if (issuesRes.ok && Array.isArray(issuesData)) {
+        setIssues(issuesData);
+        issuesFilterRef.current = requestedTab;
+      } else {
+        failures.push('issues');
+        // Never keep another tab's rows under the newly selected filter.
+        if (issuesFilterRef.current !== requestedTab) {
+          setIssues([]);
+          issuesFilterRef.current = requestedTab;
+        }
+      }
+
+      if (prsRes.ok && Array.isArray(prsData)) {
+        setPrs(prsData);
+      } else {
+        failures.push('prs');
+      }
+
+      if (blacklistRes.ok && Array.isArray(blacklistData)) {
+        setBlacklist(blacklistData);
+      } else {
+        failures.push('blacklist');
+      }
+
+      if (failures.length > 0) {
+        setFetchError(`Failed to load: ${failures.join(', ')}. Showing last successful data.`);
+      } else {
+        setFetchError(null);
+        setLastUpdate(new Date());
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
+      if (!isLatest()) {
+        return;
+      }
+      // Match non-OK issues handling: do not keep another tab's rows after a rejected fetch.
+      if (issuesFilterRef.current !== requestedTab) {
+        setIssues([]);
+        issuesFilterRef.current = requestedTab;
+      }
+      setFetchError('Failed to refresh dashboard data. Showing last successful data.');
     } finally {
-      setLoading(false);
+      // Abort siblings still in flight when Promise.all rejects early (one fetch
+      // failed while another is stalled). Clearing the timeout alone would leave
+      // those requests detached from fetchAbortRef and able to accumulate.
+      window.clearTimeout(timeoutId);
+      if (!controller.signal.aborted) {
+        controller.abort();
+      }
+      if (fetchAbortRef.current === controller) {
+        fetchAbortRef.current = null;
+      }
+      if (isLatest()) {
+        fetchInFlightRef.current = false;
+        setLoading(false);
+      }
     }
   }, [activeTab]);
 
@@ -105,9 +214,14 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
+    void fetchData({ force: true });
+    const interval = setInterval(() => {
+      void fetchData({ force: false });
+    }, 10000);
+    return () => {
+      clearInterval(interval);
+      fetchAbortRef.current?.abort();
+    };
   }, [fetchData]);
 
   const handleAdminLogin = async (token: string) => {
@@ -144,7 +258,7 @@ export default function Dashboard() {
       if (res.status === 401) setAdminAuthenticated(false);
       throw new Error(data.error || 'Failed to add to blacklist');
     }
-    fetchData();
+    void fetchData({ force: true });
   };
 
   const handleRemoveBlacklist = async (repo: string) => {
@@ -157,7 +271,7 @@ export default function Dashboard() {
       if (res.status === 401) setAdminAuthenticated(false);
       throw new Error(data.error || 'Failed to remove from blacklist');
     }
-    fetchData();
+    void fetchData({ force: true });
   };
 
   if (loading) {
@@ -203,7 +317,7 @@ export default function Dashboard() {
                 </div>
               )}
               <button
-                onClick={fetchData}
+                onClick={() => void fetchData({ force: true })}
                 className="p-2 text-[#71717a] hover:text-[#00ff9d] hover:bg-[#1a1a24] rounded-lg transition-all group"
               >
                 <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
@@ -215,6 +329,15 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
+        {fetchError && (
+          <div
+            role="alert"
+            className="mb-6 rounded-lg border border-[#ff6b6b]/30 bg-[#ff6b6b]/10 px-4 py-3 text-sm font-mono text-[#ff8a8a]"
+          >
+            {fetchError}
+          </div>
+        )}
+
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatsCard
