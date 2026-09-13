@@ -81,12 +81,20 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<IssueTab>('all');
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
   const fetchRequestIdRef = useRef(0);
+  const fetchInFlightRef = useRef(false);
   const issuesFilterRef = useRef<IssueTab>('all');
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (options?: { force?: boolean }) => {
+    const force = options?.force ?? true;
+    // Skip overlapping polls so a slow in-flight load can finish and clear loading.
+    if (fetchInFlightRef.current && !force) {
+      return;
+    }
+
     const requestId = ++fetchRequestIdRef.current;
     const requestedTab = activeTab;
     const isLatest = () => requestId === fetchRequestIdRef.current;
+    fetchInFlightRef.current = true;
 
     try {
       const [statsRes, issuesRes, prsRes, blacklistRes] = await Promise.all([
@@ -150,9 +158,15 @@ export default function Dashboard() {
       if (!isLatest()) {
         return;
       }
+      // Match non-OK issues handling: do not keep another tab's rows after a rejected fetch.
+      if (issuesFilterRef.current !== requestedTab) {
+        setIssues([]);
+        issuesFilterRef.current = requestedTab;
+      }
       setFetchError('Failed to refresh dashboard data. Showing last successful data.');
     } finally {
       if (isLatest()) {
+        fetchInFlightRef.current = false;
         setLoading(false);
       }
     }
@@ -179,8 +193,10 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 10000);
+    void fetchData({ force: true });
+    const interval = setInterval(() => {
+      void fetchData({ force: false });
+    }, 10000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -218,7 +234,7 @@ export default function Dashboard() {
       if (res.status === 401) setAdminAuthenticated(false);
       throw new Error(data.error || 'Failed to add to blacklist');
     }
-    fetchData();
+    void fetchData({ force: true });
   };
 
   const handleRemoveBlacklist = async (repo: string) => {
@@ -231,7 +247,7 @@ export default function Dashboard() {
       if (res.status === 401) setAdminAuthenticated(false);
       throw new Error(data.error || 'Failed to remove from blacklist');
     }
-    fetchData();
+    void fetchData({ force: true });
   };
 
   if (loading) {
@@ -277,7 +293,7 @@ export default function Dashboard() {
                 </div>
               )}
               <button
-                onClick={fetchData}
+                onClick={() => void fetchData({ force: true })}
                 className="p-2 text-[#71717a] hover:text-[#00ff9d] hover:bg-[#1a1a24] rounded-lg transition-all group"
               >
                 <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
