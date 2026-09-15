@@ -88,6 +88,20 @@ export default function Dashboard() {
   const fetchAbortRef = useRef<AbortController | null>(null);
   const issuesFilterRef = useRef<IssueTab>('all');
 
+  const clearPrivateData = useCallback(() => {
+    ++fetchRequestIdRef.current;
+    fetchAbortRef.current?.abort();
+    fetchInFlightRef.current = false;
+    setStats(null);
+    setIssues([]);
+    setPrs([]);
+    setBlacklist([]);
+    setLastUpdate(null);
+    setAdminAuthenticated(false);
+    setLoading(false);
+    setFetchError('Sign in with your admin token to view dashboard data.');
+  }, []);
+
   const fetchData = useCallback(async (options?: { force?: boolean }) => {
     const force = options?.force ?? true;
     // Skip overlapping polls so a slow in-flight load can finish and clear loading.
@@ -123,6 +137,11 @@ export default function Dashboard() {
       ]);
 
       if (!isLatest()) {
+        return;
+      }
+
+      if ([statsRes, issuesRes, prsRes, blacklistRes].some((res) => res.status === 401)) {
+        clearPrivateData();
         return;
       }
 
@@ -191,7 +210,7 @@ export default function Dashboard() {
         setLoading(false);
       }
     }
-  }, [activeTab]);
+  }, [activeTab, clearPrivateData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -236,14 +255,16 @@ export default function Dashboard() {
       throw new Error(data.error || 'Unauthorized');
     }
     setAdminAuthenticated(true);
+    await fetchData({ force: true });
   };
 
   const handleAdminLogout = async () => {
-    await fetch('/api/admin/login', {
+    const res = await fetch('/api/admin/login', {
       method: 'DELETE',
       credentials: 'same-origin',
     });
-    setAdminAuthenticated(false);
+    if (!res.ok) throw new Error('Failed to logout');
+    clearPrivateData();
   };
 
   const handleAddBlacklist = async (repo: string, reason: string) => {

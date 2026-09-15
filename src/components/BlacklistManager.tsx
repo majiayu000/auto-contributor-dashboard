@@ -158,7 +158,7 @@ export function BlacklistManager({
               </button>
             </div>
             <p className="text-[10px] text-[#52525b] font-mono">
-              Mutations require an admin session or Bearer token.
+              Sign in to view dashboard data and manage the blacklist.
             </p>
           </div>
         )}
