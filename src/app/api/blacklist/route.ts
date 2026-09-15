@@ -4,7 +4,10 @@ import { getBlacklist, addToBlacklist, removeFromBlacklist } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const unauthorized = requireAdminAuth(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const blacklist = await getBlacklist();
     return NextResponse.json(blacklist);
