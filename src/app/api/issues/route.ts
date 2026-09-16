@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server';
-import { getIssues } from '@/lib/db';
+import { requireAdminAuth } from '@/lib/admin-auth';
+import { getIssues, parseLimit } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+  const unauthorized = requireAdminAuth(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status') || undefined;
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const limit = parseLimit(searchParams.get('limit'));
 
     const issues = await getIssues(status, limit);
     return NextResponse.json(issues);
