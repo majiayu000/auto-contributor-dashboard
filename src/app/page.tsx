@@ -276,7 +276,7 @@ export default function Dashboard() {
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      if (res.status === 401) setAdminAuthenticated(false);
+      if (res.status === 401) clearPrivateData();
       throw new Error(data.error || 'Failed to add to blacklist');
     }
     void fetchData({ force: true });
@@ -289,7 +289,7 @@ export default function Dashboard() {
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      if (res.status === 401) setAdminAuthenticated(false);
+      if (res.status === 401) clearPrivateData();
       throw new Error(data.error || 'Failed to remove from blacklist');
     }
     void fetchData({ force: true });
