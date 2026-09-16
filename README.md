@@ -2,6 +2,14 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+### Database TLS
+
+Postgres connections verify TLS certificates by default. For local/dev setups that use a self-signed or unverifiable certificate, set `DATABASE_SSL_INSECURE=true` to allow `rejectUnauthorized: false`. Do not enable this in production.
+
+`DATABASE_URL` SSL mode flags cannot disable TLS or certificate/hostname verification. URL certificate options (`sslrootcert`, `sslcert`, `sslkey`) remain supported. Only the exact value `DATABASE_SSL_INSECURE=true` disables verification; TLS remains enabled.
+
+Run the TLS configuration regression checks with `npm test`.
+
 First, run the development server:
 
 ```bash

@@ -1,8 +1,31 @@
-import { Pool } from 'pg';
+import { Pool, type PoolConfig } from 'pg';
+import { parseIntoClientConfig } from 'pg-connection-string';
+
+// Only disable TLS cert verification when explicitly opted in for local/dev.
+const allowInsecureSsl = process.env.DATABASE_SSL_INSECURE === 'true';
+
+// Parse once before applying TLS policy: pg otherwise lets URL SSL options
+// replace the explicit ssl object. Keep CA/client certificates from the URL.
+let connection: PoolConfig = {};
+if (process.env.DATABASE_URL) {
+  let url: URL;
+  try {
+    url = new URL(process.env.DATABASE_URL);
+  } catch {
+    // URL parser errors include the input, which may contain credentials.
+    throw new Error('DATABASE_URL is not a valid URL');
+  }
+  url.searchParams.set('sslmode', 'verify-full');
+  connection = parseIntoClientConfig(url.toString());
+}
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ...connection,
+  connectionString: undefined,
+  ssl: {
+    ...(typeof connection.ssl === 'object' ? connection.ssl : {}),
+    rejectUnauthorized: !allowInsecureSsl,
+  },
 });
 
 export interface Issue {
