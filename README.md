@@ -9,6 +9,8 @@ access; this is an operations console, not a public demo.
 
 ## Getting Started
 
+Requires Node.js 20.9+ and npm, plus a PostgreSQL database for the dashboard APIs.
+
 ### Database TLS
 
 Postgres connections verify TLS certificates by default. For local/dev setups that use a self-signed or unverifiable certificate, set `DATABASE_SSL_INSECURE=true` to allow `rejectUnauthorized: false`. Do not enable this in production.
