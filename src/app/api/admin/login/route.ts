@@ -22,9 +22,11 @@ export async function POST(request: Request) {
         : extractBearerFromRequest(request);
 
     if (!token || !verifyAdminToken(token)) {
-      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      response.headers.set('Set-Cookie', clearAdminSessionCookie());
-      return response;
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!hasSameOrigin(request)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const response = NextResponse.json({ success: true });
@@ -36,10 +38,32 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  if (!hasSameOrigin(request)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   const response = NextResponse.json({ success: true });
   response.headers.set('Set-Cookie', clearAdminSessionCookie());
   return response;
+}
+
+/** Cookie writes require an explicit same-origin source; Origin takes precedence. */
+function hasSameOrigin(request: Request): boolean {
+  const url = new URL(request.url);
+  // Next.js may expose its listening hostname in request.url instead of the browser's host.
+  const host = request.headers.get('host') ?? url.host;
+  const expectedOrigin = new URL(`${url.protocol}//${host}`).origin;
+  const origin = request.headers.get('origin');
+  if (origin !== null) return origin === expectedOrigin;
+
+  const referer = request.headers.get('referer');
+  if (!referer) return false;
+  try {
+    return new URL(referer).origin === expectedOrigin;
+  } catch {
+    return false;
+  }
 }
 
 function extractBearerFromRequest(request: Request): string | null {
