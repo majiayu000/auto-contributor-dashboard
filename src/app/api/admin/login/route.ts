@@ -53,7 +53,12 @@ function hasSameOrigin(request: Request): boolean {
   const url = new URL(request.url);
   // Next.js may expose its listening hostname in request.url instead of the browser's host.
   const host = request.headers.get('host') ?? url.host;
-  const expectedOrigin = new URL(`${url.protocol}//${host}`).origin;
+  // The reverse proxy must overwrite this header with the public transport scheme.
+  const forwardedProtocol = request.headers.get('x-forwarded-proto');
+  const protocol = forwardedProtocol === 'http' || forwardedProtocol === 'https'
+    ? `${forwardedProtocol}:`
+    : url.protocol;
+  const expectedOrigin = new URL(`${protocol}//${host}`).origin;
   const origin = request.headers.get('origin');
   if (origin !== null) return origin === expectedOrigin;
 

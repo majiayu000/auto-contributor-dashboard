@@ -156,3 +156,23 @@ test('same-origin cookie writes use the browser Host rather than the internal se
     }
   }
 });
+
+test('HTTPS proxy login and logout use the forwarded public scheme', async () => {
+  const { POST, DELETE } = loadLogin();
+  const internal_url = 'http://localhost:3000/api/admin/login';
+  for (const headers of [
+    { origin },
+    { referer: `${origin}/dashboard` },
+  ]) {
+    const proxy_headers = { ...headers, host: 'dashboard.example', 'x-forwarded-proto': 'https' };
+    const login = await POST(new Request(internal_url, {
+      method: 'POST', headers: proxy_headers, body: JSON.stringify({ token: secret }),
+    }));
+    assert.equal(login.status, 200);
+    assert.match(login.headers.get('set-cookie'), /; Secure/);
+    assert.equal((await DELETE(new Request(internal_url, { method: 'DELETE', headers: proxy_headers }))).status, 200);
+  }
+  await assertForbidden(await DELETE(new Request(internal_url, {
+    method: 'DELETE', headers: { host: 'dashboard.example', 'x-forwarded-proto': 'https', origin: 'http://dashboard.example' },
+  })));
+});
