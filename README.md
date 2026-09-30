@@ -1,4 +1,11 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Auto-Contributor Dashboard
+
+An authenticated Next.js dashboard for [Auto-Contributor](https://github.com/majiayu000/auto-contributor).
+Monitor issue processing, pull requests and statistics, and manage repository blacklists
+without querying the database manually. Dashboard data and mutations require administrator
+access; this is an operations console, not a public demo.
+
+[Local setup](#getting-started) · [Required environment](#environment) · [Admin access](#admin-auth-for-dashboard-access)
 
 ## Getting Started
 
@@ -10,19 +17,22 @@ Postgres connections verify TLS certificates by default. For local/dev setups th
 
 Run the TLS configuration regression checks with `npm test`.
 
-First, run the development server:
+Clone the repository and install the locked dependencies:
+
+```bash
+git clone https://github.com/majiayu000/auto-contributor-dashboard.git
+cd auto-contributor-dashboard
+npm ci
+```
+
+Configure `DATABASE_URL` and `ADMIN_API_TOKEN` in your local runtime environment
+(see [Environment](#environment)), then start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) and sign in using the administrator token in the blacklist panel.
 
 ## Environment
 
@@ -59,17 +69,23 @@ curl -i -X POST http://localhost:3000/api/blacklist \
   -d '{"repo":"owner/repo","reason":"test"}'
 ```
 
-## Learn More
+## Development
 
-To learn more about Next.js, take a look at the following resources:
+Validation and framework references:
+
+```bash
+npm test
+npm run lint
+npm run build
+```
 
 - [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-You can check out the [Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The page declares `noindex, nofollow` because it serves an authenticated operations dashboard. This does not replace API authorization.
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Set the required database and administrator environment variables in your hosting configuration before deploying. The protected APIs reject unauthenticated requests.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
