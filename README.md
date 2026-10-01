@@ -71,6 +71,29 @@ curl -i -X POST http://localhost:3000/api/blacklist \
   -d '{"repo":"owner/repo","reason":"test"}'
 ```
 
+## First-visit questions
+
+### Why is the dashboard empty or an API returning 401?
+
+Sign in through the blacklist panel first. The issue, PR, statistics and blacklist
+APIs require administrator access; a missing `ADMIN_API_TOKEN`, an invalid token,
+or an expired session causes `401`. Check [admin access](#admin-auth-for-dashboard-access)
+before interpreting an empty view as zero activity. If an authenticated request
+fails, check the configured PostgreSQL connection and [TLS requirements](#database-tls).
+
+### Does this dashboard create contributions?
+
+It monitors Auto-Contributor data and manages the blacklist. Use the
+[Auto-Contributor CLI workflow](https://github.com/majiayu000/auto-contributor#controlled-single-issue-flow)
+to select and process an issue. The dashboard is not a public portfolio or a
+replacement for reviewing the resulting PR.
+
+### Where should I report a setup problem?
+
+Use [repository Issues](https://github.com/majiayu000/auto-contributor-dashboard/issues)
+with the failing route, status code and runtime version. Exclude administrator
+tokens, database credentials and private issue data from the report.
+
 ## Development
 
 Validation and framework references:
