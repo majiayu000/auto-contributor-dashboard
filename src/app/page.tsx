@@ -86,9 +86,11 @@ export default function Dashboard() {
   const fetchRequestIdRef = useRef(0);
   const fetchInFlightRef = useRef(false);
   const fetchAbortRef = useRef<AbortController | null>(null);
+  const restoreAbortRef = useRef<AbortController | null>(null);
   const issuesFilterRef = useRef<IssueTab>('all');
 
   const clearPrivateData = useCallback(() => {
+    restoreAbortRef.current?.abort();
     ++fetchRequestIdRef.current;
     fetchAbortRef.current?.abort();
     fetchInFlightRef.current = false;
@@ -213,22 +215,28 @@ export default function Dashboard() {
   }, [activeTab, clearPrivateData]);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+    restoreAbortRef.current = controller;
     const restoreAdminSession = async () => {
       try {
-        const res = await fetch('/api/admin/login', { credentials: 'same-origin' });
+        const res = await fetch('/api/admin/login', {
+          credentials: 'same-origin',
+          signal: controller.signal,
+        });
         if (!res.ok) return;
         const data = await res.json().catch(() => ({}));
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setAdminAuthenticated(Boolean(data.authenticated));
         }
       } catch (error) {
-        console.error('Error restoring admin session:', error);
+        if (!controller.signal.aborted) {
+          console.error('Error restoring admin session:', error);
+        }
       }
     };
     void restoreAdminSession();
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, []);
 
@@ -254,6 +262,7 @@ export default function Dashboard() {
       const data = await res.json().catch(() => ({}));
       throw new Error(data.error || 'Unauthorized');
     }
+    restoreAbortRef.current?.abort();
     setAdminAuthenticated(true);
     await fetchData({ force: true });
   };
