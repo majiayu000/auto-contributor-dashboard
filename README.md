@@ -50,7 +50,9 @@ Open [http://localhost:3000](http://localhost:3000) and sign in using the admini
   - a SameSite=Strict httpOnly `admin_session` cookie set by `POST /api/admin/login` with `{ "token": "<ADMIN_API_TOKEN>" }`.
 - The session cookie stores an HMAC-signed, time-limited credential derived from `ADMIN_API_TOKEN` — not the root secret itself. Expired or tampered cookies are rejected.
 - `GET /api/admin/login` returns `{ "authenticated": true|false }` so the UI can restore controls from a still-valid cookie after reload.
-- Clear the session with `DELETE /api/admin/login`.
+- Successful `POST /api/admin/login` and `DELETE /api/admin/login` require a same-origin `Origin` header, or a same-origin `Referer` when `Origin` is absent. Cookie writes with cross-origin, `null`, or missing source headers are rejected with `403`. CLI clients requesting a session cookie must also supply this header.
+- Failed login attempts return `401` without changing an existing session. Clear the session explicitly with same-origin `DELETE /api/admin/login`.
+- Reverse proxies must preserve the public `Host` and overwrite `X-Forwarded-Proto` with the public `http`/`https` scheme so origin checks work after TLS termination.
 - The dashboard login control is in the blacklist panel. Login refreshes private data immediately; logout or an expired session clears it. The UI sends `credentials: 'same-origin'` on mutation requests.
 - Surrounding whitespace on `ADMIN_API_TOKEN` is trimmed so file-sourced secrets with a trailing newline still match login/Bearer credentials.
 
