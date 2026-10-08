@@ -1,6 +1,6 @@
 'use client';
 
-import { ExternalLink, AlertCircle, Clock, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { ExternalLink, AlertCircle, Clock, Loader2, CheckCircle2, XCircle, CircleHelp } from 'lucide-react';
 
 interface Issue {
   id: number;
@@ -115,7 +115,14 @@ export function IssueTable({ issues, title }: IssueTableProps) {
               </tr>
             ) : (
               issues.map((issue) => {
-                const config = statusConfig[issue.status] || statusConfig.pending;
+                const knownStatus = Object.hasOwn(statusConfig, issue.status);
+                // Database statuses may come from a newer or different worker version.
+                const config = knownStatus ? statusConfig[issue.status] : {
+                  icon: CircleHelp,
+                  color: 'text-[#a1a1aa]',
+                  bg: 'bg-white/5 border-white/10',
+                  label: issue.status || 'UNKNOWN',
+                };
                 const StatusIcon = config.icon;
                 const scoreColor = getScoreColor(issue.difficulty_score);
 
@@ -151,7 +158,10 @@ export function IssueTable({ issues, title }: IssueTableProps) {
                       </a>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded border text-[10px] font-mono font-medium ${config.bg} ${config.color}`}>
+                      <span
+                        title={knownStatus ? undefined : 'Unrecognized issue status'}
+                        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded border text-[10px] font-mono font-medium ${config.bg} ${config.color}`}
+                      >
                         <StatusIcon className={`w-3 h-3 ${issue.status === 'processing' ? 'animate-spin' : ''}`} />
                         {config.label}
                       </span>
